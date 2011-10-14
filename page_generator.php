@@ -49,86 +49,82 @@ function initial_page_set_settings() {
     $submit_label = __( 'Populate Initial Pages', 'page_generator' );
     $has_pages = false;
     $content_pages_path = WP_CONTENT_DIR . '/pages_content';
+    $pages_by_depth = array();
     //loop through the content directory
     if ($handle = opendir($content_pages_path)) {
         $page_ids = array();
-        $remaining_pages = array();
         /* This is the correct way to loop over the directory. */
         while (false !== ($file = readdir($handle))) {
           $name_parts = explode('.', $file);
-          $page_path = implode('/', array_slice($name_parts, 1, -1));
-          $page = get_page_by_path($page_path);
-          if ($name_parts[1] == '') {
-            continue;
+          if ($name_parts[1] == '') { continue; }
+          $path_parts = array_slice($name_parts, 1, -1);
+          $depth = count($path_parts) -1;
+          $page_path = implode('/', $path_parts);
+          if (! isset($pages_by_depth[$depth])){
+            $pages_by_depth[$depth] = array();
           }
           echo $page_path;
           echo '<br>';
-          if ($_POST['update_pages'] == 'yes'){
-            $page_content = file_get_contents($content_pages_path . '/' . $file);
+          $pages_by_depth[$depth][] = $file;
+        }
+        if ($_POST['update_pages'] == 'yes'){
+          foreach ($pages_by_depth as $depth => $pages){
+            foreach ($pages as $file){
+              $page_content = file_get_contents($content_pages_path . '/' . $file);
+              $name_parts = explode('.', $file);
+              $path_parts = array_slice($name_parts, 1, -1);
+              $page_path = implode('/', $path_parts);
+              $page = get_page_by_path($page_path);
 
-            //extract metadata
-            preg_match("/^\<!--([^∫]*)-->/U", $page_content, $matches);
-            $meta_lines = explode("\n", trim($matches[1]));
-            $meta = array();
-            foreach ($meta_lines as $line){
-              preg_match("/([^∫]*)\s*\:\s*(.*)/", $line, $parts);
-              $meta[strtolower($parts[1])] = $parts[2];
-            }
-            if (is_null($page)){
-              $updated_page = array();
-              $updated_page['post_type']  = 'page';
-              $updated_page['post_name'] = $name_parts[count($name_parts)-2];
-            } else {
-              $updated_page = (array) $page;
-              $has_pages = true;
-            }
-            $updated_page['post_title'] = $meta['title'];
-            $updated_page['post_status'] = 'publish';
-            $updated_page['post_content'] = substr($page_content,strlen($matches[0])+1);
-            $updated_page['menu_order'] = (int) $name_parts[0]; //If new post is a page, sets the order should it appear in the tabs.
-            if (count($name_parts) >=4 ){
-              echo 'is child<br><br>';
-              $parent_name = $name_parts[count($name_parts)-3];
-              var_dump($parent_name);
-              if($page_ids[$parent_name]){
-                // this will only work if the menu_order for the child comes after the parent
-                // I am doing this to prevent an extra query to get the id of a page from the slug
-                $parentId = $page_ids[$parent_name];
-              }else{
-                $remaining_files[] = $file;
+              //extract metadata
+              preg_match("/^\<!--([^∫]*)-->/U", $page_content, $matches);
+              $meta_lines = explode("\n", trim($matches[1]));
+              $meta = array();
+              foreach ($meta_lines as $line){
+                preg_match("/([^∫]*)\s*\:\s*(.*)/", $line, $parts);
+                $meta[strtolower($parts[1])] = $parts[2];
               }
-              $updated_page['post_parent'] = $parentId; //Sets the parent of the new post.
-            }
-            //   'menu_order' => [ <order> ] //If new post is a page, sets the order should it appear in the tabs.
-            //   'comment_status' => [ 'closed' | 'open' ] // 'closed' means no comments.
-            //   'ping_status' => [ 'closed' | 'open' ] // 'closed' means pingbacks or trackbacks turned off
-            //   'pinged' => [ ? ] //?
-            //   'post_author' => [ <user ID> ] //The user ID number of the author.
-            //   'post_category' => [ array(<category id>, <...>) ] //Add some categories.
-            //   'tags_input' => [ '<tag>, <tag>, <...>' ] //For tags.
-            if (is_null($page)){
-              echo 'insert<br>';
-              var_dump($updated_page);
-              $pageid = wp_insert_post ($updated_page);
-              if ($pageid == 0) { 
-               echo  'Add Page Failed <br>';
+              if (is_null($page)){
+                $updated_page = array();
+                $updated_page['post_type']  = 'page';
+                $updated_page['post_name'] = $name_parts[count($name_parts)-2];
+              } else {
+                $updated_page = (array) $page;
+                $has_pages = true;
               }
-            } else {
-              echo ' updated<br>';
-              $pageid = $updated_page['ID'];
-              wp_update_post($updated_page);
-            }
-            $page_ids[$page_path] = $pageid;
-            if ($meta['template']) {
-              update_post_meta($pageid, '_wp_page_template', $meta['template'] . '.php');
-            }
-            if ($meta['option']) {
-              if (($meta['option'] == 'page_on_front') || ($meta['option'] == 'page_for_posts')){
-                update_option( $meta['option'], $pageid );
+              $updated_page['post_title'] = $meta['title'];
+              $updated_page['post_status'] = 'publish';
+              $updated_page['post_content'] = substr($page_content,strlen($matches[0])+1);
+              $updated_page['menu_order'] = (int) $name_parts[0]; //If new post is a page, sets the order should it appear in the tabs.
+              if (count($name_parts) >=4 ){
+                // is child
+                $parent_path = implode('/', array_slice($path_parts,0,-1));
+                $updated_page['post_parent'] = $page_ids[$parent_path];
               }
-            }
-          }
-        } // while
+              $updated_page['page_path'] = $page_path;
+              if (is_null($page)){
+                // insert
+                $pageid = wp_insert_post($updated_page);
+                if ($pageid == 0) { 
+                 echo  'Add Page Failed <br>';
+                }
+              } else {
+                //updated
+                $pageid = $updated_page['ID'];
+                wp_update_post($updated_page);
+              }
+              $page_ids[$page_path] = $pageid;
+              if ($meta['template']) {
+                update_post_meta($pageid, '_wp_page_template', $meta['template'] . '.php');
+              }
+              if ($meta['option']) {
+                if (($meta['option'] == 'page_on_front') || ($meta['option'] == 'page_for_posts')){
+                  update_option( $meta['option'], $pageid );
+                }
+              }
+            } //foreach pages
+          }// foreach pages_by_depth
+        }
         closedir($handle);
         if ($has_pages) {
           $submit_label = __( 'Sobrescrever Páginas Iniciais (cuidado!)', 'pgsm-boilerplate-child' );
