@@ -3,7 +3,7 @@
 Plugin Name: Page Generator
 Plugin URI: https://github.com/fczuardi/page_generator
 Description: Generates/updates an initial set of pages and subpages based on a folder containing html files.
-Version: 0.1
+Version: 0.2
 Author: Fabricio Campos Zuardi
 Author URI: http://fabricio.org
 License: New BSD
@@ -48,7 +48,7 @@ function initial_page_set_settings() {
     }
     $submit_label = __( 'Populate Initial Pages', 'page_generator' );
     $has_pages = false;
-    $content_pages_path = WP_CONTENT_DIR . '/pages_content';
+    $content_pages_path = WP_CONTENT_DIR . '/initial_pages';
     $pages_by_depth = array();
     //loop through the content directory
     if ($handle = opendir($content_pages_path)) {
